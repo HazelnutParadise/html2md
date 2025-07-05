@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML 轉 Markdown 工具</title>
+    <script src="https://unpkg.com/turndown/dist/turndown.js"></script>
+    <script src="https://unpkg.com/turndown-plugin-gfm/dist/turndown-plugin-gfm.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #fef9e7 0%, #fff3e0 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #f7b733 0%, #fc4a1a 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 40px;
+        }
+
+        .upload-section {
+            margin-bottom: 30px;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .file-input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            z-index: 2;
+        }
+
+        .drop-zone {
+            border: 3px dashed #f7b733;
+            border-radius: 15px;
+            padding: 60px 40px;
+            text-align: center;
+            background: #fffbf0;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .drop-zone:hover,
+        .drop-zone.drag-over {
+            border-color: #fc4a1a;
+            background: #fff3cd;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(247, 183, 51, 0.2);
+        }
+
+        .drop-zone-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+            color: #f7b733;
+            transition: all 0.3s ease;
+        }
+
+        .drop-zone:hover .drop-zone-icon,
+        .drop-zone.drag-over .drop-zone-icon {
+            color: #fc4a1a;
+            transform: scale(1.1);
+        }
+
+        .drop-zone-text {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #856404;
+            margin-bottom: 10px;
+        }
+
+        .drop-zone-subtext {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-bottom: 20px;
+        }
+
+        .browse-button {
+            background: linear-gradient(135deg, #f7b733 0%, #fc4a1a 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .browse-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(247, 183, 51, 0.4);
+        }
+
+        .drag-instructions {
+            margin-top: 15px;
+            color: #6c757d;
+            font-size: 0.9em;
+            text-align: center;
+            font-style: italic;
+        }
+
+        .file-list {
+            margin-top: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: white;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .file-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .file-info {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .file-size {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .file-status {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-processing {
+            background: #f7b733;
+            color: white;
+        }
+
+        .status-completed {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .status-error {
+            background: #fc4a1a;
+            color: white;
+        }
+
+        .action-buttons {
+            margin: 30px 0;
+            text-align: center;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            margin: 0 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #f7b733 0%, #fc4a1a 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(247, 183, 51, 0.4);
+        }
+
+        .btn-secondary {
+            background: #ddd;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #ccc;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .progress-section {
+            margin: 30px 0;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #f7b733 0%, #fc4a1a 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            text-align: center;
+            margin-top: 10px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .output-section {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .output-item {
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .output-header {
+            background: #f8f9fa;
+            padding: 15px;
+            font-weight: 600;
+            color: #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .output-content {
+            padding: 0;
+        }
+
+        .output-textarea {
+            width: 100%;
+            min-height: 200px;
+            border: none;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            resize: vertical;
+            background: #fafafa;
+        }
+
+        .download-btn {
+            padding: 8px 16px;
+            background: #ffc107;
+            color: #212529;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+
+        .download-btn:hover {
+            background: #e0a800;
+        }
+
+        .download-all-section {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .alert {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 8px;
+            font-weight: 500;
+        }
+
+        .alert-info {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .alert-success {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .btn {
+                display: block;
+                width: 100%;
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔄 HTML 轉 Markdown</h1>
+            <p>專業的批次轉換工具，支援多檔案同時處理</p>
+        </div>
+
+        <div class="main-content"> <!-- 檔案上傳區域 -->
+            <div class="upload-section">
+                <div class="file-input-wrapper" id="dropZone">
+                    <input type="file" id="fileInput" class="file-input" multiple accept=".html,.htm" />
+                    <div class="drop-zone" id="dropZoneArea">
+                        <div class="drop-zone-icon">📁</div>
+                        <div class="drop-zone-text">拖曳 HTML 檔案到這裡</div>
+                        <div class="drop-zone-subtext">或點擊下方按鈕選擇檔案</div>
+                        <button type="button" class="browse-button" id="browseButton">
+                            瀏覽檔案
+                        </button>
+                    </div>
+                </div>
+                <div class="drag-instructions">
+                    💡 支援多檔案同時上傳，僅接受 .html 和 .htm 格式
+                </div>
+
+                <div id="fileList" class="file-list" style="display: none;">
+                    <h3>已選擇的檔案：</h3>
+                    <div id="fileItems"></div>
+                </div>
+            </div>
+
+            <!-- 操作按鈕 -->
+            <div class="action-buttons">
+                <button id="convertBtn" class="btn btn-primary" disabled>
+                    🚀 開始轉換
+                </button>
+                <button id="clearBtn" class="btn btn-secondary">
+                    🗑️ 清除所有
+                </button>
+            </div>
+
+            <!-- 進度條 -->
+            <div id="progressSection" class="progress-section">
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+                <div id="progressText" class="progress-text">準備中...</div>
+            </div>
+
+            <!-- 結果輸出區域 -->
+            <div id="outputSection" class="output-section">
+                <h3>轉換結果：</h3>
+                <div id="outputItems"></div>
+
+                <div class="download-all-section">
+                    <button id="downloadAllBtn" class="btn btn-primary">
+                        💾 下載所有 Markdown 檔案 (ZIP)
+                    </button>
+                </div>
+            </div>
+
+            <!-- 說明資訊 -->
+            <div class="alert alert-info">
+                <strong>使用說明：</strong><br>
+                1. 將 HTML 檔案拖曳到上方虛線框內，或點擊「瀏覽檔案」按鈕選擇檔案<br>
+                2. 點擊「開始轉換」按鈕進行批次轉換<br>
+                3. 轉換完成後可以預覽結果或下載 Markdown 檔案<br>
+                4. 支援下載單個檔案或打包下載所有檔案
+            </div>
+        </div>
+    </div>
+
+    <!-- JSZip 套件用於打包下載 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <script>
+        class Html2MdConverter {
+            constructor() {
+                this.files = [];
+                this.results = [];
+                this.turndownService = null;
+                this.initTurndown();
+                this.bindEvents();
+            }
+
+            initTurndown() {
+                this.turndownService = new TurndownService({
+                    headingStyle: 'atx',
+                    hr: '---',
+                    bulletListMarker: '-',
+                    codeBlockStyle: 'fenced',
+                    fence: '```',
+                    emDelimiter: '_',
+                    strongDelimiter: '**',
+                    linkStyle: 'inlined',
+                    linkReferenceStyle: 'full'
+                });
+
+                // 加載 GitHub Flavored Markdown 插件
+                if (typeof turndownPluginGfm !== 'undefined') {
+                    this.turndownService.use(turndownPluginGfm.gfm);
+                }
+
+                // 自訂規則
+                this.turndownService.addRule('strikethrough', {
+                    filter: ['del', 's', 'strike'],
+                    replacement: function (content) {
+                        return '~~' + content + '~~';
+                    }
+                });
+
+                this.turndownService.addRule('highlight', {
+                    filter: 'mark',
+                    replacement: function (content) {
+                        return '==' + content + '==';
+                    }
+                });
+
+                // 處理圖片
+                this.turndownService.addRule('image', {
+                    filter: 'img',
+                    replacement: function (content, node) {
+                        const alt = node.getAttribute('alt') || '';
+                        const src = node.getAttribute('src') || '';
+                        const title = node.getAttribute('title');
+                        const titlePart = title ? ' "' + title + '"' : '';
+                        return src ? '![' + alt + '](' + src + titlePart + ')' : '';
+                    }
+                });
+            }
+
+            bindEvents() {
+                const fileInput = document.getElementById('fileInput');
+                const convertBtn = document.getElementById('convertBtn');
+                const clearBtn = document.getElementById('clearBtn');
+                const downloadAllBtn = document.getElementById('downloadAllBtn');
+                const dropZone = document.getElementById('dropZone');
+                const dropZoneArea = document.getElementById('dropZoneArea');
+                const browseButton = document.getElementById('browseButton');
+
+                fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+                convertBtn.addEventListener('click', () => this.convertFiles());
+                clearBtn.addEventListener('click', () => this.clearAll());
+                downloadAllBtn.addEventListener('click', () => this.downloadAll());
+
+                // 拖曳上傳功能
+                dropZone.addEventListener('dragover', (e) => this.handleDragOver(e));
+                dropZone.addEventListener('dragenter', (e) => this.handleDragEnter(e));
+                dropZone.addEventListener('dragleave', (e) => this.handleDragLeave(e));
+                dropZone.addEventListener('drop', (e) => this.handleDrop(e));
+
+                // 點擊上傳
+                browseButton.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    fileInput.click();
+                });
+
+                dropZoneArea.addEventListener('click', () => fileInput.click());
+            }
+
+            handleFileSelect(event) {
+                const files = Array.from(event.target.files);
+                this.processFiles(files);
+            }
+
+            handleDragOver(event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+
+            handleDragEnter(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                const dropZoneArea = document.getElementById('dropZoneArea');
+                dropZoneArea.classList.add('drag-over');
+            }
+
+            handleDragLeave(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                // 只有當離開整個拖曳區域時才移除樣式
+                if (!event.currentTarget.contains(event.relatedTarget)) {
+                    const dropZoneArea = document.getElementById('dropZoneArea');
+                    dropZoneArea.classList.remove('drag-over');
+                }
+            }
+
+            handleDrop(event) {
+                event.preventDefault();
+                event.stopPropagation();
+
+                const dropZoneArea = document.getElementById('dropZoneArea');
+                dropZoneArea.classList.remove('drag-over');
+
+                const files = Array.from(event.dataTransfer.files);
+                this.processFiles(files);
+            }
+
+            processFiles(files) {
+                this.files = files.filter(file =>
+                    file.type === 'text/html' ||
+                    file.name.toLowerCase().endsWith('.html') ||
+                    file.name.toLowerCase().endsWith('.htm')
+                );
+
+                if (this.files.length === 0) {
+                    this.showAlert('請選擇有效的 HTML 檔案！', 'error');
+                    return;
+                }
+
+                if (files.length > this.files.length) {
+                    this.showAlert(`已過濾 ${files.length - this.files.length} 個非 HTML 檔案，僅保留 ${this.files.length} 個 HTML 檔案`, 'info');
+                }
+
+                this.displayFileList();
+                document.getElementById('convertBtn').disabled = false;
+            }
+
+            displayFileList() {
+                const fileList = document.getElementById('fileList');
+                const fileItems = document.getElementById('fileItems');
+
+                fileItems.innerHTML = '';
+
+                this.files.forEach((file, index) => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item';
+                    fileItem.innerHTML = `
+                        <div class="file-info">
+                            <div class="file-name">${file.name}</div>
+                            <div class="file-size">${this.formatFileSize(file.size)}</div>
+                        </div>
+                        <div class="file-status status-pending" id="status-${index}">待處理</div>
+                    `;
+                    fileItems.appendChild(fileItem);
+                });
+
+                fileList.style.display = 'block';
+            }
+
+            formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+
+            async convertFiles() {
+                const progressSection = document.getElementById('progressSection');
+                const progressFill = document.getElementById('progressFill');
+                const progressText = document.getElementById('progressText');
+                const convertBtn = document.getElementById('convertBtn');
+
+                progressSection.style.display = 'block';
+                convertBtn.disabled = true;
+                this.results = [];
+
+                for (let i = 0; i < this.files.length; i++) {
+                    const file = this.files[i];
+                    const statusElement = document.getElementById(`status-${i}`);
+
+                    try {
+                        // 更新狀態
+                        statusElement.textContent = '處理中';
+                        statusElement.className = 'file-status status-processing';
+
+                        const progress = ((i + 1) / this.files.length) * 100;
+                        progressFill.style.width = progress + '%';
+                        progressText.textContent = `正在處理: ${file.name} (${i + 1}/${this.files.length})`;
+
+                        // 讀取檔案內容
+                        const htmlContent = await this.readFileContent(file);
+
+                        // 轉換為 Markdown
+                        const markdownContent = this.turndownService.turndown(htmlContent);
+
+                        // 儲存結果
+                        this.results.push({
+                            fileName: file.name.replace(/\.(html|htm)$/i, '.md'),
+                            content: markdownContent,
+                            originalName: file.name
+                        });
+
+                        // 更新狀態為完成
+                        statusElement.textContent = '已完成';
+                        statusElement.className = 'file-status status-completed';
+
+                    } catch (error) {
+                        console.error('轉換錯誤:', error);
+                        statusElement.textContent = '錯誤';
+                        statusElement.className = 'file-status status-error';
+
+                        this.results.push({
+                            fileName: file.name,
+                            content: `轉換錯誤: ${error.message}`,
+                            originalName: file.name,
+                            error: true
+                        });
+                    }
+                }
+
+                progressText.textContent = '轉換完成！';
+                this.displayResults();
+                convertBtn.disabled = false;
+            }
+
+            readFileContent(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.onerror = (e) => reject(new Error('檔案讀取失敗'));
+                    reader.readAsText(file, 'UTF-8');
+                });
+            }
+
+            displayResults() {
+                const outputSection = document.getElementById('outputSection');
+                const outputItems = document.getElementById('outputItems');
+
+                outputItems.innerHTML = '';
+
+                this.results.forEach((result, index) => {
+                    const outputItem = document.createElement('div');
+                    outputItem.className = 'output-item';
+
+                    const downloadBtn = result.error ? '' : `
+                        <button class="download-btn" onclick="converter.downloadSingle(${index})">
+                            💾 下載
+                        </button>
+                    `;
+
+                    outputItem.innerHTML = `
+                        <div class="output-header">
+                            <span>${result.fileName}</span>
+                            ${downloadBtn}
+                        </div>
+                        <div class="output-content">
+                            <textarea class="output-textarea" readonly>${result.content}</textarea>
+                        </div>
+                    `;
+
+                    outputItems.appendChild(outputItem);
+                });
+
+                outputSection.style.display = 'block';
+                this.showAlert(`成功轉換 ${this.results.filter(r => !r.error).length} 個檔案！`, 'success');
+            }
+
+            downloadSingle(index) {
+                const result = this.results[index];
+                if (result.error) return;
+
+                const blob = new Blob([result.content], { type: 'text/markdown;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = result.fileName;
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+
+            async downloadAll() {
+                if (this.results.length === 0) {
+                    this.showAlert('沒有可下載的檔案！', 'error');
+                    return;
+                }
+
+                const zip = new JSZip();
+                const validResults = this.results.filter(r => !r.error);
+
+                validResults.forEach(result => {
+                    zip.file(result.fileName, result.content);
+                });
+
+                try {
+                    const content = await zip.generateAsync({ type: 'blob' });
+                    const url = URL.createObjectURL(content);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'converted-markdown-files.zip';
+                    a.click();
+                    URL.revokeObjectURL(url);
+
+                    this.showAlert('ZIP 檔案已下載！', 'success');
+                } catch (error) {
+                    this.showAlert('下載失敗：' + error.message, 'error');
+                }
+            }
+
+            clearAll() {
+                this.files = [];
+                this.results = [];
+
+                document.getElementById('fileInput').value = '';
+                document.getElementById('fileList').style.display = 'none';
+                document.getElementById('progressSection').style.display = 'none';
+                document.getElementById('outputSection').style.display = 'none';
+                document.getElementById('convertBtn').disabled = true;
+
+                // 清除任何顯示的警告
+                const alerts = document.querySelectorAll('.alert:not(.alert-info)');
+                alerts.forEach(alert => alert.remove());
+            }
+
+            showAlert(message, type = 'info') {
+                // 移除舊的警告
+                const oldAlerts = document.querySelectorAll('.alert:not(.alert-info)');
+                oldAlerts.forEach(alert => alert.remove());
+
+                const alert = document.createElement('div');
+                alert.className = `alert alert-${type}`;
+                alert.innerHTML = message;
+
+                const mainContent = document.querySelector('.main-content');
+                const infoAlert = document.querySelector('.alert-info');
+                mainContent.insertBefore(alert, infoAlert);
+
+                // 3秒後自動消失
+                setTimeout(() => {
+                    if (alert.parentNode) {
+                        alert.remove();
+                    }
+                }, 3000);
+            }
+        }
+
+        // 初始化轉換器
+        const converter = new Html2MdConverter();
+    </script>
+</body>
+
+</html>
