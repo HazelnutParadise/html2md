@@ -24,8 +24,7 @@
 ### 內嵌到 Google Sites
 
 1. 在 Google Sites 中插入「內嵌」元件
-2. 選擇「上傳」選項，上傳 `index.html` 檔案
-3. 或者將整個 HTML 代碼複製到自訂 HTML 元件中
+2. 將整個 HTML 代碼複製到自訂 HTML 元件中
 
 ### 部署到網站
 
@@ -93,8 +92,3 @@ html2md/
 ## 📞 技術支援
 
 如有任何問題或建議，請提交 Issue 或 Pull Request。
-
-## 📋 版本歷史
-
-- v1.0.0 - 初始版本，支援基本 HTML 轉 Markdown 功能
-- v1.1.0 - 新增拖曳上傳功能，支援批次轉換和 ZIP 下載功能
