@@ -313,6 +313,9 @@
             font-size: 0.9em;
             resize: vertical;
             background: #fafafa;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
 
         .download-btn {
@@ -472,7 +475,8 @@
                     emDelimiter: '_',
                     strongDelimiter: '**',
                     linkStyle: 'inlined',
-                    linkReferenceStyle: 'full'
+                    linkReferenceStyle: 'full',
+                    preformattedCode: true
                 });
 
                 // 加載 GitHub Flavored Markdown 插件
@@ -504,6 +508,16 @@
                         const title = node.getAttribute('title');
                         const titlePart = title ? ' "' + title + '"' : '';
                         return src ? '![' + alt + '](' + src + titlePart + ')' : '';
+                    }
+                });
+
+                // 處理換行和空白字符
+                this.turndownService.addRule('preserveWhitespace', {
+                    filter: function (node) {
+                        return node.nodeName === 'BR';
+                    },
+                    replacement: function () {
+                        return '\n\n';
                     }
                 });
             }
@@ -652,8 +666,24 @@
                         // 讀取檔案內容
                         const htmlContent = await this.readFileContent(file);
 
+                        // 驗證檔案內容是否有效
+                        if (!this.isValidHtmlContent(htmlContent)) {
+                            throw new Error('檔案內容格式不正確或為空');
+                        }
+
+                        // 清理 HTML 內容，移除可能的腳本和樣式
+                        const cleanedHtml = this.cleanHtmlContent(htmlContent);
+
                         // 轉換為 Markdown
-                        const markdownContent = this.turndownService.turndown(htmlContent);
+                        let markdownContent = this.turndownService.turndown(cleanedHtml);
+
+                        // 清理和格式化 Markdown 內容
+                        markdownContent = this.cleanMarkdown(markdownContent);
+
+                        // 再次驗證轉換結果
+                        if (markdownContent.length < 10) {
+                            throw new Error('轉換結果過短，可能轉換失敗');
+                        }
 
                         // 儲存結果
                         this.results.push({
@@ -678,6 +708,9 @@
                             error: true
                         });
                     }
+
+                    // 添加小延遲以避免瀏覽器阻塞
+                    await new Promise(resolve => setTimeout(resolve, 50));
                 }
 
                 progressText.textContent = '轉換完成！';
@@ -691,6 +724,163 @@
                     reader.onload = (e) => resolve(e.target.result);
                     reader.onerror = (e) => reject(new Error('檔案讀取失敗'));
                     reader.readAsText(file, 'UTF-8');
+                });
+            }
+
+            cleanMarkdown(markdown) {
+                // 移除多餘的空行（超過2個連續換行）
+                markdown = markdown.replace(/\n{3,}/g, '\n\n');
+
+                // 確保標題前後有適當的空行
+                markdown = markdown.replace(/([^\n])\n(#{1,6}\s)/g, '$1\n\n$2');
+                markdown = markdown.replace(/(#{1,6}[^\n]+)\n([^\n#])/g, '$1\n\n$2');
+
+                // 確保清單項目格式正確
+                markdown = markdown.replace(/\n([*\-+]|\d+\.)\s/g, '\n$1 ');
+
+                // 移除行首和行尾的空白字符
+                markdown = markdown.split('\n').map(line => line.trim()).join('\n');
+
+                // 移除開頭和結尾的空行
+                markdown = markdown.replace(/^\n+/, '').replace(/\n+$/, '');
+
+                return markdown;
+            }
+
+            isValidHtmlContent(content) {
+                // 檢查是否為空或過短
+                if (!content || content.trim().length < 10) {
+                    return false;
+                }
+
+                // 檢查是否包含基本的 HTML 結構
+                const hasHtmlTags = /<[^>]+>/g.test(content);
+                if (!hasHtmlTags) {
+                    return false;
+                }
+
+                return true;
+            }
+
+            cleanHtmlContent(html) {
+                try {
+                    // 先用正則表達式進行基本清理，避免解析器問題
+                    let preCleanedHtml = html
+                        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+                        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+                        .replace(/<link\b[^>]*>/gi, '')
+                        .replace(/<meta\b[^>]*>/gi, '')
+                        .replace(/<!--[\s\S]*?-->/gi, '');
+
+                    // 創建一個臨時的 DOM 解析器
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(preCleanedHtml, 'text/html');
+
+                    // 檢查解析是否成功
+                    if (!doc || !doc.documentElement) {
+                        throw new Error('HTML 解析失敗');
+                    }
+
+                    // 再次移除可能殘留的標籤
+                    try {
+                        const scripts = doc.querySelectorAll('script');
+                        scripts.forEach(script => {
+                            try { script.remove(); } catch (e) { console.warn('移除script錯誤:', e); }
+                        });
+
+                        const styles = doc.querySelectorAll('style');
+                        styles.forEach(style => {
+                            try { style.remove(); } catch (e) { console.warn('移除style錯誤:', e); }
+                        });
+
+                        const links = doc.querySelectorAll('link');
+                        links.forEach(link => {
+                            try { link.remove(); } catch (e) { console.warn('移除link錯誤:', e); }
+                        });
+
+                        const metas = doc.querySelectorAll('meta');
+                        metas.forEach(meta => {
+                            try { meta.remove(); } catch (e) { console.warn('移除meta錯誤:', e); }
+                        });
+                    } catch (error) {
+                        console.warn('移除標籤時發生錯誤:', error);
+                    }
+
+                    // 移除註釋的安全方法
+                    try {
+                        this.removeComments(doc);
+                    } catch (error) {
+                        console.warn('移除註釋失敗，繼續處理:', error);
+                    }
+
+                    // 嘗試提取 body 內容，如果沒有 body 則使用整個文檔
+                    const body = doc.body;
+                    if (body && body.innerHTML.trim()) {
+                        return body.innerHTML;
+                    } else {
+                        // 如果沒有 body，提取所有文本內容相關的標籤
+                        const contentElements = doc.querySelectorAll('h1, h2, h3, h4, h5, h6, p, div, span, a, img, ul, ol, li, table, tr, td, th, blockquote, pre, code, article, section, main');
+                        if (contentElements.length > 0) {
+                            let cleanedContent = '';
+                            contentElements.forEach(el => {
+                                try {
+                                    cleanedContent += el.outerHTML + '\n';
+                                } catch (e) {
+                                    console.warn('提取元素內容錯誤:', e);
+                                }
+                            });
+                            return cleanedContent;
+                        } else {
+                            // 最後的備選方案：返回預清理的內容
+                            return preCleanedHtml;
+                        }
+                    }
+                } catch (error) {
+                    console.warn('HTML 清理過程中發生錯誤，使用備選方案:', error);
+                    // 如果解析失敗，使用正則表達式清理
+                    return html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+                        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+                        .replace(/<link\b[^>]*>/gi, '')
+                        .replace(/<meta\b[^>]*>/gi, '')
+                        .replace(/<!--[\s\S]*?-->/gi, '');
+                }
+            }
+
+            removeComments(element) {
+                try {
+                    // 使用遞歸方式安全移除註釋
+                    this.removeCommentsRecursively(element);
+                } catch (error) {
+                    console.warn('移除註釋時發生錯誤:', error);
+                    // 如果出錯，忽略註釋移除步驟
+                }
+            }
+
+            removeCommentsRecursively(node) {
+                // 收集要移除的註釋節點
+                const commentsToRemove = [];
+
+                // 遍歷所有子節點
+                for (let i = 0; i < node.childNodes.length; i++) {
+                    const child = node.childNodes[i];
+
+                    if (child.nodeType === Node.COMMENT_NODE) {
+                        commentsToRemove.push(child);
+                    } else if (child.nodeType === Node.ELEMENT_NODE) {
+                        // 遞歸處理子元素
+                        this.removeCommentsRecursively(child);
+                    }
+                }
+
+                // 移除收集到的註釋
+                commentsToRemove.forEach(comment => {
+                    try {
+                        if (comment.parentNode) {
+                            comment.parentNode.removeChild(comment);
+                        }
+                    } catch (e) {
+                        console.warn('移除單個註釋時發生錯誤:', e);
+                    }
                 });
             }
 
